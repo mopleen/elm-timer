@@ -1,6 +1,7 @@
-port module Main exposing (..)
+port module Main exposing (main)
 
 import Browser
+import Browser.Events
 import Html exposing (Html)
 import Html.Events exposing (onClick)
 import Task
@@ -32,24 +33,19 @@ type TimerState
   | RunningUntil Time.Posix
   | Expired
 
-type alias CountdownTimerData =
-  { 
-
-  }
-
 type alias TimerProgram = List Int
 
 
 type alias Model =
-  { zone : Time.Zone
-  , time : Time.Posix
-  , elapseAt : Maybe Time.Posix
+  { time : Time.Posix
+  , timer : Maybe TimerState
+  , program : TimerProgram
   }
 
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  ( Model Time.utc (Time.millisToPosix 0) Nothing
+  ( Model (Time.millisToPosix 0) Nothing []
   , Cmd.none
   )
 
@@ -60,7 +56,6 @@ init _ =
 
 type Msg
   = Tick Time.Posix
-  | AdjustTimeZone Time.Zone
   | StartTimer
 
 plusSeconds : Int -> Time.Posix -> Time.Posix
@@ -81,35 +76,61 @@ update msg model =
     Tick newTime ->
       processModel { model | time = newTime }
 
-    AdjustTimeZone newZone ->
-      ( { model | zone = newZone }
+    StartTimer ->
+      ( { model | program = [3,5] }
       , Cmd.none
       )
 
-    StartTimer ->
-      ( { model | elapseAt = Just (plusSeconds 5 model.time) }
-      , Cmd.none
-      )
+updateTimer : Time.Posix -> TimerState -> TimerState
+updateTimer now state
+  = case state of
+    WaitingSeconds sec -> RunningUntil (plusSeconds sec now)
+
+    RunningUntil when ->
+      let
+        secondsLeft = timeDiff when now
+      in if secondsLeft < 0 then
+        Expired
+      else
+        RunningUntil when
+
+    Expired -> Expired
+
+
+
+-- processTimer : Time.Posix -> Maybe TimerState -> Int
+-- processTimer now maybeTimer
+--   = case maybeTimer of 
+--     Nothing -> 
 
 processModel : Model -> (Model, Cmd Msg)
 processModel model =
-  case model.elapseAt of
-    Nothing -> (model, Cmd.none)
-    Just when ->
-      let
-        secondsLeft = timeDiff when model.time
-      in if secondsLeft < 0 then
-        ( { model | elapseAt = Nothing }
-        , playSound "hello"
-        )
-      else (model, Cmd.none)
+  case model.timer of
+    Nothing -> 
+      case model.program of
+        [] -> (model, Cmd.none)
+        sec1::rest -> 
+          ( { model | timer = Just (WaitingSeconds sec1), program = rest }
+          , Cmd.none
+          )
+
+    Just Expired -> 
+      ({ model | timer = Nothing }
+      , playSound "hello"
+      )
+
+    Just timerState -> 
+      ( { model | timer = Just (updateTimer model.time timerState) }
+      , Cmd.none
+      )
+
 
 -- SUBSCRIPTIONS
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-  Time.every 50 Tick
+  Browser.Events.onAnimationFrame Tick
 
 
 
@@ -118,14 +139,8 @@ subscriptions _ =
 
 view : Model -> Html Msg
 view model =
-  case model.elapseAt of
-    Nothing ->
-      Html.div []
-        [
-          Html.button [ onClick StartTimer ] [ Html.text "Start" ]
-        ]
-
-    Just when ->
+  case model.timer of
+    Just (RunningUntil when) ->
       let
         secondsLeft = timeDiff when model.time
       in
@@ -133,3 +148,9 @@ view model =
           [
             Html.div [] [ Html.text (String.fromInt secondsLeft) ]
           ]
+
+    _ ->
+      Html.div []
+        [
+          Html.button [ onClick StartTimer ] [ Html.text "Start" ]
+        ]

@@ -1,4 +1,4 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Browser
 import Html exposing (Html)
@@ -11,6 +11,7 @@ import Time
 -- MAIN
 
 
+main : Program () Model Msg
 main =
   Browser.element
     { init = init
@@ -20,6 +21,9 @@ main =
     }
 
 
+-- PORTS
+
+port playSound : String -> Cmd msg
 
 -- MODEL
 
@@ -75,9 +79,7 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     Tick newTime ->
-      ( processModel { model | time = newTime }
-      , Cmd.none
-      )
+      processModel { model | time = newTime }
 
     AdjustTimeZone newZone ->
       ( { model | zone = newZone }
@@ -89,16 +91,18 @@ update msg model =
       , Cmd.none
       )
 
-processModel : Model -> Model
+processModel : Model -> (Model, Cmd Msg)
 processModel model =
   case model.elapseAt of
-    Nothing -> model
+    Nothing -> (model, Cmd.none)
     Just when ->
       let
         secondsLeft = timeDiff when model.time
       in if secondsLeft < 0 then
-        { model | elapseAt = Nothing }
-      else model
+        ( { model | elapseAt = Nothing }
+        , playSound "hello"
+        )
+      else (model, Cmd.none)
 
 -- SUBSCRIPTIONS
 

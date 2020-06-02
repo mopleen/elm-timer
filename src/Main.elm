@@ -30,8 +30,7 @@ port playSound : String -> Cmd msg
 -- MODEL
 
 type TimerState
-  = WaitingSeconds Int
-  | RunningUntil Time.Posix
+  = RunningUntil Time.Posix
   | Expired
 
 type alias TimerInfo =
@@ -78,14 +77,7 @@ program =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    Tick newTime ->
-      let
-        (m2, cmd2) = processModel { model | time = newTime }
-        (m3, cmd3) = processModel m2
-        (m4, cmd4) = processModel m3
-        (m5, cmd5) = processModel m4
-      in
-        (m5, Cmd.batch [cmd2, cmd3, cmd4, cmd5])
+    Tick newTime -> processModel { model | time = newTime }
       
     StartTimer ->
       ( { model | program = program }
@@ -93,10 +85,8 @@ update msg model =
       )
 
 updateTimer : Time.Posix -> TimerState -> TimerState
-updateTimer now state
-  = case state of
-    WaitingSeconds sec -> RunningUntil (Utils.plusSeconds sec now)
-
+updateTimer now state =
+  case state of
     RunningUntil when ->
       let
         secondsLeft = Utils.timeDiff when now
@@ -109,39 +99,35 @@ updateTimer now state
 
 
 
--- processTimer : Time.Posix -> Maybe TimerState -> Int
--- processTimer now maybeTimer
---   = case maybeTimer of 
---     Nothing -> 
+
+startTimer : Time.Posix -> TimerProgram -> (TimerProgram, Maybe CurrentTimerInfo)
+startTimer now timers =
+  case timers of
+    [] -> ([], Nothing)
+    t1::rest ->
+      let
+        timerState = RunningUntil (Utils.plusSeconds t1.seconds now)
+      in (rest, Just { state = timerState, info = t1 })
+
+popTimer : Model -> Model
+popTimer model =
+  let
+    (newProgram, newTimer) = startTimer model.time model.program
+  in
+    { model | timer = newTimer, program = newProgram }
 
 processModel : Model -> (Model, Cmd Msg)
 processModel model =
   case model.timer of
-    Nothing -> 
-      case model.program of
-        [] -> (model, Cmd.none)
-        sec1::rest ->
-          let newTimer = { state = WaitingSeconds sec1.seconds, info = sec1 }
-          in
-            ( { model | timer = Just newTimer, program = rest }
-            , Cmd.none
-            )
+    Nothing -> (popTimer model, Cmd.none)
 
-    Just { state, info } ->
-      case state of
-        Expired -> 
-          ({ model | timer = Nothing }
-          , playSound "hello"
-          )
+    Just { state } ->
+      let
+        state2 = updateTimer model.time state
+      in case state2 of
+        Expired -> (popTimer model, playSound "hello")
 
-        _ -> 
-          let
-            newState = updateTimer model.time state
-            newCurTimerInfo = { state = newState, info = info }
-          in
-            ( { model | timer = Just newCurTimerInfo }
-            , Cmd.none
-            )
+        _ -> (model, Cmd.none)
 
 
 -- SUBSCRIPTIONS

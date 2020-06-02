@@ -12,4 +12,4 @@ timeDiff t2 t1 =
   let 
     t2m = Time.posixToMillis t2
     t1m = Time.posixToMillis t1
-  in (t2m-t1m) // 1000
+  in t2m-t1m

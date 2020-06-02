@@ -79,8 +79,14 @@ update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     Tick newTime ->
-      processModel { model | time = newTime }
-
+      let
+        (m2, cmd2) = processModel { model | time = newTime }
+        (m3, cmd3) = processModel m2
+        (m4, cmd4) = processModel m3
+        (m5, cmd5) = processModel m4
+      in
+        (m5, Cmd.batch [cmd2, cmd3, cmd4, cmd5])
+      
     StartTimer ->
       ( { model | program = program }
       , Cmd.none
@@ -94,7 +100,7 @@ updateTimer now state
     RunningUntil when ->
       let
         secondsLeft = Utils.timeDiff when now
-      in if secondsLeft < 0 then
+      in if secondsLeft <= 0 then
         Expired
       else
         RunningUntil when
@@ -157,7 +163,7 @@ view model =
       case state of
         RunningUntil when ->
           let
-            secondsLeft = Utils.timeDiff when model.time
+            secondsLeft = (Utils.timeDiff when model.time)//1000 + 1
           in
             Html.div []
               [ Html.h2 [] [ Html.text info.caption ]

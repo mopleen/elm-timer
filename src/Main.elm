@@ -7,6 +7,7 @@ import Html.Events exposing (onClick)
 import Task
 import Time
 
+import Utils
 
 
 -- MAIN
@@ -33,12 +34,22 @@ type TimerState
   | RunningUntil Time.Posix
   | Expired
 
-type alias TimerProgram = List Int
+type alias TimerInfo =
+  { seconds : Int
+  , caption : String
+  }
+
+type alias TimerProgram = List TimerInfo
+
+type alias CurrentTimerInfo =
+  { state : TimerState
+  , info : TimerInfo
+  }
 
 
 type alias Model =
   { time : Time.Posix
-  , timer : Maybe TimerState
+  , timer : Maybe CurrentTimerInfo
   , program : TimerProgram
   }
 
@@ -58,17 +69,11 @@ type Msg
   = Tick Time.Posix
   | StartTimer
 
-plusSeconds : Int -> Time.Posix -> Time.Posix
-plusSeconds sec t1 = 
-  let millis = sec*1000 + Time.posixToMillis t1
-  in Time.millisToPosix millis
-
-timeDiff : Time.Posix -> Time.Posix -> Int
-timeDiff t2 t1 =
-  let 
-    t2m = Time.posixToMillis t2
-    t1m = Time.posixToMillis t1
-  in (t2m-t1m) // 1000
+program : TimerProgram
+program =
+  [ { seconds = 3, caption = "Three timer" }
+  , { seconds = 5, caption = "Five timer" }
+  ]
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -77,18 +82,18 @@ update msg model =
       processModel { model | time = newTime }
 
     StartTimer ->
-      ( { model | program = [3,5] }
+      ( { model | program = program }
       , Cmd.none
       )
 
 updateTimer : Time.Posix -> TimerState -> TimerState
 updateTimer now state
   = case state of
-    WaitingSeconds sec -> RunningUntil (plusSeconds sec now)
+    WaitingSeconds sec -> RunningUntil (Utils.plusSeconds sec now)
 
     RunningUntil when ->
       let
-        secondsLeft = timeDiff when now
+        secondsLeft = Utils.timeDiff when now
       in if secondsLeft < 0 then
         Expired
       else
@@ -109,20 +114,28 @@ processModel model =
     Nothing -> 
       case model.program of
         [] -> (model, Cmd.none)
-        sec1::rest -> 
-          ( { model | timer = Just (WaitingSeconds sec1), program = rest }
-          , Cmd.none
+        sec1::rest ->
+          let newTimer = { state = WaitingSeconds sec1.seconds, info = sec1 }
+          in
+            ( { model | timer = Just newTimer, program = rest }
+            , Cmd.none
+            )
+
+    Just { state, info } ->
+      case state of
+        Expired -> 
+          ({ model | timer = Nothing }
+          , playSound "hello"
           )
 
-    Just Expired -> 
-      ({ model | timer = Nothing }
-      , playSound "hello"
-      )
-
-    Just timerState -> 
-      ( { model | timer = Just (updateTimer model.time timerState) }
-      , Cmd.none
-      )
+        _ -> 
+          let
+            newState = updateTimer model.time state
+            newCurTimerInfo = { state = newState, info = info }
+          in
+            ( { model | timer = Just newCurTimerInfo }
+            , Cmd.none
+            )
 
 
 -- SUBSCRIPTIONS
@@ -140,17 +153,21 @@ subscriptions _ =
 view : Model -> Html Msg
 view model =
   case model.timer of
-    Just (RunningUntil when) ->
-      let
-        secondsLeft = timeDiff when model.time
-      in
-        Html.div []
-          [
-            Html.div [] [ Html.text (String.fromInt secondsLeft) ]
-          ]
-
+    Just { state, info } ->
+      case state of
+        RunningUntil when ->
+          let
+            secondsLeft = Utils.timeDiff when model.time
+          in
+            Html.div []
+              [ Html.h2 [] [ Html.text info.caption ]
+              , Html.div [] [ Html.text (String.fromInt secondsLeft) ]
+              ]
+        _ -> 
+          Html.div []
+            [ Html.button [ onClick StartTimer ] [ Html.text "Start" ]
+            ]
     _ ->
       Html.div []
-        [
-          Html.button [ onClick StartTimer ] [ Html.text "Start" ]
+        [ Html.button [ onClick StartTimer ] [ Html.text "Start" ]
         ]

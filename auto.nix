@@ -32,6 +32,7 @@ let
       in ''
         mkdir -p $out/share/doc
         cp $src/src/index.html $out/
+        cp -r $src/sounds $out/
         ${lib.concatStrings (map (module: ''
           echo "compiling ${elmfile module}"
           elm make ${elmfile module} --output $out/${module}.${extension} --docs $out/share/doc/${module}.json

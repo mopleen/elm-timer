@@ -37,6 +37,7 @@ port playSound : String -> Cmd msg
 type alias TimerInfo =
     { millis : Int
     , caption : String
+    , pauseBefore : Bool
     }
 
 
@@ -76,13 +77,13 @@ type Msg
 
 schedule : Schedule
 schedule =
-    [ { millis = 3000, caption = "Three timer" }
-    , { millis = 2000, caption = "Five timer" }
-    , { millis = 1000, caption = "Five timer" }
-    , { millis = 1000, caption = "Five timer" }
-    , { millis = 1000, caption = "Five timer" }
-    , { millis = 1000, caption = "Five timer" }
-    , { millis = 5000, caption = "Five timer" }
+    [ { millis = 3000, caption = "Three timer", pauseBefore = False }
+    , { millis = 2000, caption = "Press to continue", pauseBefore = True }
+    , { millis = 1000, caption = "Five timer", pauseBefore = False }
+    , { millis = 1000, caption = "Five timer", pauseBefore = False }
+    , { millis = 1000, caption = "PTCont", pauseBefore = True }
+    , { millis = 1000, caption = "Five timer", pauseBefore = False }
+    , { millis = 5000, caption = "Five timer", pauseBefore = False }
     ]
 
 
@@ -146,8 +147,16 @@ popFromSchedule model =
                     model
 
                 t1 :: rest ->
+                    let
+                        newTimer =
+                            if t1.pauseBefore then
+                                Paused t1
+
+                            else
+                                Running t1
+                    in
                     { model
-                        | timer = Just (Running t1)
+                        | timer = Just newTimer
                         , schedule = rest
                     }
 

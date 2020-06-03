@@ -3,6 +3,7 @@ port module Main exposing (main)
 import Browser
 import Browser.Events
 import Html exposing (Html)
+import Html.Attributes
 import Html.Events exposing (onClick)
 import Task
 import Time
@@ -75,15 +76,43 @@ type Msg
     | Run
 
 
+mkT : String -> Int -> TimerInfo
+mkT caption sec =
+    { millis = sec * 1000, caption = caption, pauseBefore = False }
+
+
 schedule : Schedule
 schedule =
-    [ { millis = 3000, caption = "Three timer", pauseBefore = False }
-    , { millis = 2000, caption = "Press to continue", pauseBefore = True }
-    , { millis = 1000, caption = "Five timer", pauseBefore = False }
-    , { millis = 1000, caption = "Five timer", pauseBefore = False }
-    , { millis = 1000, caption = "PTCont", pauseBefore = True }
-    , { millis = 1000, caption = "Five timer", pauseBefore = False }
-    , { millis = 5000, caption = "Five timer", pauseBefore = False }
+    [ -- Warmup
+      mkT "Get ready..." 3
+    , mkT "Elbow drive" 60
+    , mkT "Hitchhike thumb rotation" 60
+    , mkT "Elbow rotate one direction" 30
+    , mkT "Elbow rotate another direction" 30
+    , mkT "Hands rotate one direction" 30
+    , mkT "Hands rotate another direction" 30
+    , mkT "Cat" 60
+
+    -- Workout
+    -- 2 flows
+    , { millis = 2 * 60 * 1000, caption = "Break #1", pauseBefore = True }
+
+    -- 1 flow
+    , { millis = 2 * 60 * 1000, caption = "Break #2", pauseBefore = True }
+
+    -- Fourth random workout
+    , { millis = 2 * 60 * 1000, caption = "Random workout", pauseBefore = True }
+
+    -- Cooldown
+    , { millis = 30 * 1000, caption = "Left hand grip", pauseBefore = True }
+    , mkT "Right hand grip" 30
+    , mkT "Elbow couch" 30
+    , mkT "Stretch couch" 30
+    , mkT "Forward lean one hand" 30
+    , mkT "Forward lean another hand" 30
+    , mkT "Shoulder stretch one" 30
+    , mkT "Shoulder stretch another" 30
+    , mkT "Sphinx" 60
     ]
 
 
@@ -228,7 +257,7 @@ showTimer : TimerInfo -> Html Msg
 showTimer { millis, caption } =
     Html.div []
         [ Html.h2 [] [ Html.text caption ]
-        , Html.div [] [ Html.text (String.fromInt (millis // 100)) ]
+        , Html.div [ Html.Attributes.class "timer" ] [ Html.text (String.fromInt (millis // 1000)) ]
         ]
 
 

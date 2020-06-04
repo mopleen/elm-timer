@@ -5,7 +5,6 @@ import Browser.Events
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events exposing (onClick)
-import Task
 import Time
 import Utils
 
@@ -39,12 +38,14 @@ type alias TimerInfo =
     { millis : Int
     , caption : String
     , pauseBefore : Bool
+    , preTimer : Bool
     }
 
 
-type PausableTimer
-    = Running TimerInfo
-    | Paused TimerInfo
+type alias PausableTimer =
+    { timerInfo : TimerInfo
+    , paused : Bool
+    }
 
 
 type alias Schedule =
@@ -158,12 +159,14 @@ schedule =
                             { millis = seconds * 1000
                             , caption = caption
                             , pauseBefore = False
+                            , preTimer = False
                             }
 
                         preTimer =
                             { millis = 3500
                             , caption = "➡️ " ++ timer.caption
                             , pauseBefore = s1.waiting
+                            , preTimer = True
                             }
                     in
                     { s1
@@ -178,29 +181,13 @@ schedule =
 
 
 pause : Maybe PausableTimer -> Maybe PausableTimer
-pause maybeTimer =
-    case maybeTimer of
-        Nothing ->
-            maybeTimer
-
-        Just (Paused _) ->
-            maybeTimer
-
-        Just (Running info) ->
-            Just (Paused info)
+pause =
+    Maybe.map (\t -> { t | paused = True })
 
 
 run : Maybe PausableTimer -> Maybe PausableTimer
-run maybeTimer =
-    case maybeTimer of
-        Nothing ->
-            maybeTimer
-
-        Just (Running _) ->
-            maybeTimer
-
-        Just (Paused info) ->
-            Just (Running info)
+run =
+    Maybe.map (\t -> { t | paused = False })
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -244,11 +231,7 @@ popFromSchedule model =
                 t1 :: rest ->
                     let
                         newTimer =
-                            if t1.pauseBefore then
-                                Paused t1
-
-                            else
-                                Running t1
+                            { timerInfo = t1, paused = t1.pauseBefore }
                     in
                     { model
                         | timer = Just newTimer
@@ -280,31 +263,70 @@ processModel newTime model =
             processModelWithTimePassed timePassed withNewTime
 
 
+decreaseTimer : Int -> PausableTimer -> ( Maybe PausableTimer, Cmd Msg )
+decreaseTimer timePassed pausableTimer =
+    if pausableTimer.paused then
+        ( Just pausableTimer, Cmd.none )
+
+    else
+        let
+            timerInfo =
+                pausableTimer.timerInfo
+
+            newMillis =
+                timerInfo.millis - timePassed
+
+            oldSec =
+                timerInfo.millis // 1000
+
+            newSec =
+                newMillis // 1000
+
+            beepSound =
+                if newSec <= 2 && oldSec /= newSec then
+                    playSound "beep"
+
+                else
+                    Cmd.none
+
+            endSound =
+                if timerInfo.preTimer then
+                    "long_beep"
+
+                else
+                    "long_beep"
+
+            newTimerInfo =
+                { timerInfo | millis = newMillis }
+        in
+        if newMillis <= 0 then
+            ( Nothing, playSound endSound )
+
+        else
+            ( Just { pausableTimer | timerInfo = newTimerInfo }, beepSound )
+
+
 processModelWithTimePassed : Int -> Model -> ( Model, Cmd Msg )
 processModelWithTimePassed timePassed model =
     case model.timer of
         Nothing ->
             ( model, Cmd.none )
 
-        Just (Paused _) ->
-            ( model, Cmd.none )
-
-        Just (Running ({ millis } as timerInfo)) ->
+        Just pausableTimer ->
             let
-                newMillis =
-                    millis - timePassed
+                ( maybePausableTimer, cmd ) =
+                    decreaseTimer timePassed pausableTimer
             in
-            if newMillis <= 0 then
-                let
-                    withNextTimer =
-                        popFromSchedule { model | timer = Nothing }
-                in
-                ( withNextTimer, playSound "hello" )
+            case maybePausableTimer of
+                Nothing ->
+                    ( popFromSchedule { model | timer = Nothing }
+                    , cmd
+                    )
 
-            else
-                ( { model | timer = Just (Running { timerInfo | millis = newMillis }) }
-                , Cmd.none
-                )
+                Just newPausableTimer ->
+                    ( { model | timer = Just newPausableTimer }
+                    , cmd
+                    )
 
 
 
@@ -331,20 +353,22 @@ showTimer { millis, caption } =
 view : Model -> Html Msg
 view model =
     case model.timer of
-        Just (Running timer) ->
+        Just { timerInfo, paused } ->
+            let
+                runPause =
+                    if paused then
+                        Html.button [ onClick Run ] [ Html.text "Run" ]
+
+                    else
+                        Html.button [ onClick Pause ] [ Html.text "Pause" ]
+            in
             Html.div []
-                [ showTimer timer
-                , Html.button [ onClick Pause ] [ Html.text "Pause" ]
+                [ showTimer timerInfo
+                , runPause
                 , Html.button [ onClick Skip ] [ Html.text "Skip" ]
                 ]
 
-        Just (Paused timer) ->
-            Html.div []
-                [ showTimer timer
-                , Html.button [ onClick Run ] [ Html.text "Run" ]
-                ]
-
-        _ ->
+        Nothing ->
             Html.div []
                 [ Html.button [ onClick StartTimer ] [ Html.text "Start" ]
                 ]

@@ -45,17 +45,27 @@
 <body>
 	<div id="myapp"></div>
 	<audio id="timerSound" src="sounds/alarm.mp3"></audio>
+	<audio id="beep" src="sounds/beep-3.wav"></audio>
+	<audio id="long_beep" src="sounds/Beep-mp3.mp3"></audio>
 	<button onclick="getElementById('timerSound').play()">press me</button>
 </body>
 
 <script type="text/javascript">
 	var mySound = document.getElementById("timerSound");
+	var beep = document.getElementById("beep");
+	var long_beep = document.getElementById("long_beep");
 
 	var app = Elm.Main.init({
 		node: document.getElementById("myapp")
 	});
 	app.ports.playSound.subscribe(function (message) {
-		mySound.play();
+		if (message == "beep") {
+			beep.play();
+		} else if (message == "long_beep") {
+			long_beep.play();
+		} else {
+			mySound.play();
+		}
 	});
 </script>
 

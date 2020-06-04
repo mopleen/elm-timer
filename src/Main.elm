@@ -74,46 +74,107 @@ type Msg
     | StartTimer
     | Pause
     | Run
+    | Skip
 
 
-mkT : String -> Int -> TimerInfo
+type ScheduleCommand
+    = CountDown { seconds : Int, caption : String }
+    | Wait
+
+
+mkT : String -> Int -> ScheduleCommand
 mkT caption sec =
-    { millis = sec * 1000, caption = caption, pauseBefore = False }
+    CountDown { seconds = sec, caption = caption }
+
+
+timeSpeed : Int
+timeSpeed =
+    1
+
+
+timePeriod : Int
+timePeriod =
+    30
+
+
+twoPeriods : Int
+twoPeriods =
+    2 * timePeriod
+
+
+program : List ScheduleCommand
+program =
+    [ -- Warmup
+      Wait
+    , mkT "Elbow drive" twoPeriods
+    , mkT "Hitchhike thumb rotation" twoPeriods
+    , mkT "Elbow rotate one direction" timePeriod
+    , mkT "Elbow rotate another direction" timePeriod
+    , mkT "Hands rotate one direction" timePeriod
+    , mkT "Hands rotate another direction" timePeriod
+    , mkT "Cat" twoPeriods
+
+    -- Workout
+    -- 2 flows
+    , Wait
+    , mkT "Break #1" (2 * twoPeriods)
+
+    -- 1 flow
+    , Wait
+    , mkT "Break #2" (2 * twoPeriods)
+
+    -- Fourth random workout
+    , Wait
+    , mkT "Random workout" (2 * twoPeriods)
+
+    -- Cooldown
+    , Wait
+    , mkT "Left hand grip" timePeriod
+    , mkT "Right hand grip" timePeriod
+    , mkT "Elbow couch" timePeriod
+    , mkT "Stretch couch" timePeriod
+    , mkT "Forward lean one hand" timePeriod
+    , mkT "Forward lean another hand" timePeriod
+    , mkT "Shoulder stretch one" timePeriod
+    , mkT "Shoulder stretch another" timePeriod
+    , mkT "Sphinx" twoPeriods
+    ]
 
 
 schedule : Schedule
 schedule =
-    [ -- Warmup
-      mkT "Get ready..." 3
-    , mkT "Elbow drive" 60
-    , mkT "Hitchhike thumb rotation" 60
-    , mkT "Elbow rotate one direction" 30
-    , mkT "Elbow rotate another direction" 30
-    , mkT "Hands rotate one direction" 30
-    , mkT "Hands rotate another direction" 30
-    , mkT "Cat" 60
+    let
+        s =
+            { waiting = False, result = [] }
 
-    -- Workout
-    -- 2 flows
-    , { millis = 2 * 60 * 1000, caption = "Break #1", pauseBefore = True }
+        f item s1 =
+            case item of
+                Wait ->
+                    { s1 | waiting = True }
 
-    -- 1 flow
-    , { millis = 2 * 60 * 1000, caption = "Break #2", pauseBefore = True }
+                CountDown { seconds, caption } ->
+                    let
+                        timer =
+                            { millis = seconds * 1000
+                            , caption = caption
+                            , pauseBefore = False
+                            }
 
-    -- Fourth random workout
-    , { millis = 2 * 60 * 1000, caption = "Random workout", pauseBefore = True }
+                        preTimer =
+                            { millis = 3500
+                            , caption = "➡️ " ++ timer.caption
+                            , pauseBefore = s1.waiting
+                            }
+                    in
+                    { s1
+                        | result = timer :: preTimer :: s1.result
+                        , waiting = False
+                    }
 
-    -- Cooldown
-    , { millis = 30 * 1000, caption = "Left hand grip", pauseBefore = True }
-    , mkT "Right hand grip" 30
-    , mkT "Elbow couch" 30
-    , mkT "Stretch couch" 30
-    , mkT "Forward lean one hand" 30
-    , mkT "Forward lean another hand" 30
-    , mkT "Shoulder stretch one" 30
-    , mkT "Shoulder stretch another" 30
-    , mkT "Sphinx" 60
-    ]
+        result =
+            List.foldl f s program
+    in
+    List.reverse result.result
 
 
 pause : Maybe PausableTimer -> Maybe PausableTimer
@@ -163,6 +224,11 @@ update msg model =
             , Cmd.none
             )
 
+        Skip ->
+            ( popFromSchedule { model | timer = Nothing }
+            , Cmd.none
+            )
+
 
 popFromSchedule : Model -> Model
 popFromSchedule model =
@@ -208,7 +274,8 @@ processModel newTime model =
         Just oldTime ->
             let
                 timePassed =
-                    Utils.timeDiff newTime oldTime
+                    timeSpeed
+                        * Utils.timeDiff newTime oldTime
             in
             processModelWithTimePassed timePassed withNewTime
 
@@ -268,6 +335,7 @@ view model =
             Html.div []
                 [ showTimer timer
                 , Html.button [ onClick Pause ] [ Html.text "Pause" ]
+                , Html.button [ onClick Skip ] [ Html.text "Skip" ]
                 ]
 
         Just (Paused timer) ->

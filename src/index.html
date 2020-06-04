@@ -47,13 +47,19 @@
 	<audio id="timerSound" src="sounds/alarm.mp3"></audio>
 	<audio id="beep" src="sounds/beep-3.wav"></audio>
 	<audio id="long_beep" src="sounds/Beep-mp3.mp3"></audio>
-	<button onclick="getElementById('timerSound').play()">press me</button>
+	<button onclick="warmupSounds()">press me</button>
 </body>
 
 <script type="text/javascript">
 	var mySound = document.getElementById("timerSound");
 	var beep = document.getElementById("beep");
 	var long_beep = document.getElementById("long_beep");
+
+	function warmupSounds() {
+		beep.play();
+		long_beep.play();
+		mySound.play();
+	}
 
 	var app = Elm.Main.init({
 		node: document.getElementById("myapp")

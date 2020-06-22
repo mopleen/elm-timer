@@ -5,6 +5,7 @@ import Browser.Events
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events exposing (onClick)
+import Parser exposing ((|.), (|=), Parser, keyword, oneOf, succeed)
 import Time
 import Utils
 
@@ -56,12 +57,14 @@ type alias Model =
     { time : Maybe Time.Posix
     , timer : Maybe PausableTimer
     , schedule : Schedule
+    , code : String
+    , parsed : Result String (List ScheduleCommand)
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model Nothing Nothing []
+    ( Model Nothing Nothing [] "" (Ok [])
     , Cmd.none
     )
 
@@ -75,7 +78,9 @@ type Msg
     | StartTimer
     | Pause
     | Run
+    | Reset
     | Skip
+    | Change String
 
 
 type ScheduleCommand
@@ -142,8 +147,23 @@ program =
     ]
 
 
-schedule : Schedule
-schedule =
+commandParser : Parser ScheduleCommand
+commandParser =
+    oneOf
+        [ succeed Wait
+            |. keyword "wait"
+            |. Parser.end
+        , succeed mkT
+            |= Parser.getChompedString (Parser.chompUntil " for")
+            |. Parser.token " for"
+            |. Parser.spaces
+            |= Parser.int
+            |. Parser.end
+        ]
+
+
+makeSchedule : List ScheduleCommand -> Schedule
+makeSchedule commands =
     let
         s =
             { waiting = False, result = [] }
@@ -175,7 +195,7 @@ schedule =
                     }
 
         result =
-            List.foldl f s program
+            List.foldl f s commands
     in
     List.reverse result.result
 
@@ -190,6 +210,54 @@ run =
     Maybe.map (\t -> { t | paused = False })
 
 
+parseLine : String -> Result String ScheduleCommand
+parseLine command =
+    let
+        withListDeadEnd =
+            Parser.run commandParser command
+    in
+    Result.mapError Parser.deadEndsToString withListDeadEnd
+
+
+parseWithLineError : Int -> String -> Result String ScheduleCommand
+parseWithLineError lineIndex command =
+    let
+        addLine err =
+            "Line " ++ String.fromInt lineIndex ++ ": " ++ err
+
+        trimmedCommand =
+            command |> String.trim |> String.toLower
+
+        parsed =
+            parseLine trimmedCommand
+    in
+    Result.mapError addLine parsed
+
+
+concatResult : List (Result String ScheduleCommand) -> Result String (List ScheduleCommand)
+concatResult results =
+    let
+        f item state =
+            Result.map2 (::) item state
+
+        reversed =
+            List.foldl f (Ok []) results
+    in
+    Result.map List.reverse reversed
+
+
+parseSchedule : String -> Result String (List ScheduleCommand)
+parseSchedule code =
+    let
+        ls =
+            String.lines code
+
+        cs =
+            List.indexedMap parseWithLineError ls
+    in
+    concatResult cs
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -197,6 +265,13 @@ update msg model =
             processModel newTime model
 
         StartTimer ->
+            let
+                schedule =
+                    model.parsed
+                        |> Result.toMaybe
+                        |> Maybe.map makeSchedule
+                        |> Maybe.withDefault []
+            in
             ( { model | schedule = schedule }
             , Cmd.none
             )
@@ -211,8 +286,21 @@ update msg model =
             , Cmd.none
             )
 
+        Reset ->
+            ( { model | schedule = [], timer = Nothing }
+            , Cmd.none
+            )
+
         Skip ->
             ( popFromSchedule { model | timer = Nothing }
+            , Cmd.none
+            )
+
+        Change code ->
+            ( { model
+                | parsed = parseSchedule code
+                , code = code
+              }
             , Cmd.none
             )
 
@@ -350,6 +438,16 @@ showTimer { millis, caption } =
         ]
 
 
+showParseError : Result String (List ScheduleCommand) -> List (Html Msg)
+showParseError parsed =
+    case parsed of
+        Ok _ ->
+            []
+
+        Err error ->
+            [ Html.div [] [ Html.text error ] ]
+
+
 view : Model -> Html Msg
 view model =
     case model.timer of
@@ -366,9 +464,19 @@ view model =
                 [ showTimer timerInfo
                 , runPause
                 , Html.button [ onClick Skip ] [ Html.text "Skip" ]
+                , Html.div [] [ Html.button [ onClick Reset ] [ Html.text "Reset" ] ]
                 ]
 
         Nothing ->
             Html.div []
-                [ Html.button [ onClick StartTimer ] [ Html.text "Start" ]
-                ]
+                ([ Html.button [ onClick StartTimer ] [ Html.text "Start" ]
+                 , Html.textarea
+                    [ Html.Attributes.cols 120
+                    , Html.Attributes.rows 40
+                    , Html.Events.onInput Change
+                    ]
+                    [ Html.text model.code
+                    ]
+                 ]
+                    ++ showParseError model.parsed
+                )
